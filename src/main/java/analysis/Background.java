@@ -8,6 +8,7 @@ import javax.swing.JTabbedPane;
 import modules.CNDmodule;
 import modules.DCmodule;
 import modules.FTCALmodule;
+import modules.HTCCmodule;
 import org.jlab.detector.base.DetectorType;
 import org.jlab.groot.base.GStyle;
 import org.jlab.groot.data.H1F;
@@ -48,11 +49,12 @@ public class Background {
     private void init(String active, double window, String opts) {
         OPTSTAT = opts;
         GStyle.getH1FAttributes().setOptStat(opts);
-        GStyle.getAxisAttributesX().setTitleFontSize(18);
-        GStyle.getAxisAttributesX().setLabelFontSize(14);
-        GStyle.getAxisAttributesY().setTitleFontSize(18);
-        GStyle.getAxisAttributesY().setLabelFontSize(14);
-        GStyle.getAxisAttributesZ().setLabelFontSize(12);
+        GStyle.getAxisAttributesX().setTitleFontSize(26);
+        GStyle.getAxisAttributesX().setLabelFontSize(20);
+        GStyle.getAxisAttributesY().setTitleFontSize(26);
+        GStyle.getAxisAttributesY().setLabelFontSize(20);
+        GStyle.getAxisAttributesZ().setLabelFontSize(18);
+        GStyle.getAxisAttributesZ().setTitleFontSize(20);
         GStyle.getAxisAttributesX().setLabelFontName("Arial");
         GStyle.getAxisAttributesY().setLabelFontName("Arial");
         GStyle.getAxisAttributesZ().setLabelFontName("Arial");
@@ -65,6 +67,7 @@ public class Background {
 
         Constants.setTimeWindow(window);  
         this.addModule(active, new DCmodule());
+        this.addModule(active, new HTCCmodule());
         this.addModule(active, new FTCALmodule());
         this.addModule(active, new CNDmodule());
     }
@@ -167,7 +170,8 @@ public class Background {
         parser.addOption("-stats"      ,"",        "histogram stat option (e.g. \"10\" will display entries)");
         parser.addOption("-time"       ,"250",     "simulated time window per event in ns");
         parser.addOption("-modules"    ,"",        "colon-separated list of modules to be activated");
-        
+        parser.addOption("-lumi"       ,"450",     "LUMI_EVENT used in simulation (default 450 for RGH)");
+
         parser.parse(args);
         
         String namePrefix  = parser.getOption("-o").stringValue();        
