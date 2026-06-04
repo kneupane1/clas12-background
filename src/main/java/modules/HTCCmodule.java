@@ -1,6 +1,7 @@
 package modules;
 
 import java.util.List;
+import java.util.stream.Collectors;
 import objects.Hit;
 import analysis.Module;
 import objects.Event;
@@ -11,6 +12,9 @@ import org.jlab.groot.data.H1F;
 import org.jlab.groot.data.H2F;
 import org.jlab.groot.graphics.EmbeddedPad;
 import org.jlab.groot.group.DataGroup;
+import java.io.FileWriter;
+import java.io.PrintWriter;
+import java.io.IOException;
 
 /**
  * Background module for the HTCC (High Threshold Cherenkov Counter).
@@ -38,8 +42,99 @@ public class HTCCmodule extends Module {
     private static final int NHALVES = 2; // layer 1–2
     private static final double ADC_TO_NPHE = 50.0; // 100 * mc_gain(=0.5)
 
+    // Pass -DexcludeSector=4 on the command line to drop one sector from all plots.
+    // 0 = include all sectors (default).
+    // private static final int EXCLUDED_SECTOR =
+    // Integer.getInteger("excludeSector", 0);
+    private static final int EXCLUDED_SECTOR = Integer.parseInt(System.getenv().getOrDefault("EXCLUDE_SECTOR", "0"));
+
     public HTCCmodule() {
         super(DetectorType.HTCC);
+    }
+
+    ///////////// debug helper //////
+    private void printHTCCSummary(double lumiScale,
+            int activeSectors,
+            int nAllPmts,
+            int nPerRing) {
+
+        String config = System.getenv().getOrDefault("HTCC_CONFIG", "unknown");
+        String deltaTns = System.getenv().getOrDefault("HTCC_DT_NS", "252.0");
+        String outFile = System.getenv().getOrDefault("HTCC_CSV", "htcc_rate_probability.csv");
+
+        System.out.println("\n================ HTCC MODULE SUMMARY ================");
+        System.out.printf("Config name              = %s%n", config);
+        System.out.printf("Number of events         = %d%n", this.getNevents());
+        System.out.printf("Luminosity scale         = %.6f%n", lumiScale);
+        System.out.printf("Probability time window  = %s ns%n", deltaTns);
+        System.out.printf("Excluded sector          = %d%n", EXCLUDED_SECTOR);
+
+        if (EXCLUDED_SECTOR > 0)
+            System.out.printf("Sector %d is EXCLUDED from HTCC histograms.%n", EXCLUDED_SECTOR);
+        else
+            System.out.println("No sector is excluded. Using all HTCC sectors.");
+
+        System.out.printf("Active sectors           = %d%n", activeSectors);
+        System.out.printf("HTCC rings               = %d%n", NRINGS);
+        System.out.printf("HTCC halves per ring     = %d%n", NHALVES);
+        System.out.printf("Total PMTs used          = %d%n", nAllPmts);
+        System.out.printf("PMTs per ring used       = %d%n", nPerRing);
+        System.out.printf("ADC to NPhe factor       = %.3f%n", ADC_TO_NPHE);
+        System.out.printf("CSV output file          = %s%n", outFile);
+        System.out.println("Probability formula      = 100 * (1 - exp(-rate_Hz * deltaT_s))");
+        System.out.println("=====================================================\n");
+    }
+
+    ////////// For csv file /////////
+    private void writeRateProbabilityCSV(double lumiScale) {
+
+        String config = System.getenv().getOrDefault("HTCC_CONFIG", "unknown");
+        double deltaTns = Double.parseDouble(System.getenv().getOrDefault("HTCC_DT_NS", "252.0"));
+        String outFile = System.getenv().getOrDefault("HTCC_CSV", "htcc_rate_probability_no_sec4.csv");
+        double deltaTs = deltaTns * 1.0e-9;
+
+        System.out.printf("%n>>>>> timeWindow_ns = %.3f ns%n", deltaTns);
+
+        DataGroup dg = this.getHistos().get("Rate vs Ring (Threshold)");
+        H1F h0 = dg.getH1F("hi_rvr_nphe0");
+        H1F h10 = dg.getH1F("hi_rvr_nphe10");
+
+        boolean append = true;
+        boolean writeHeader = !(new java.io.File(outFile).exists());
+
+        try (PrintWriter out = new PrintWriter(new FileWriter(outFile, append))) {
+
+            if (writeHeader) {
+                out.println(
+                        "config,excluded_sector,lumi_scale,delta_t_ns,ring,threshold,rate_kHz_per_PMT,rate_Hz_per_PMT,probability_percent");
+            }
+
+            for (int ring = 1; ring <= NRINGS; ring++) {
+
+                int bin = h0.getAxis().getBin(ring + 0.5);
+
+                double rate0_kHz = h0.getBinContent(bin);
+                double rate10_kHz = h10.getBinContent(bin);
+
+                double rate0_Hz = rate0_kHz * 1000.0;
+                double rate10_Hz = rate10_kHz * 1000.0;
+
+                double prob0 = 100.0 * (1.0 - Math.exp(-rate0_Hz * deltaTs));
+                double prob10 = 100.0 * (1.0 - Math.exp(-rate10_Hz * deltaTs));
+
+                out.printf("%s,%d,%.6f,%.3f,%d,NPhe>0,%.6f,%.6f,%.6f%n",
+                        config, EXCLUDED_SECTOR, lumiScale, deltaTns, ring,
+                        rate0_kHz, rate0_Hz, prob0);
+
+                out.printf("%s,%d,%.6f,%.3f,%d,NPhe>10,%.6f,%.6f,%.6f%n",
+                        config, EXCLUDED_SECTOR, lumiScale, deltaTns, ring,
+                        rate10_kHz, rate10_Hz, prob10);
+            }
+
+        } catch (IOException e) {
+            System.err.println("[HTCCmodule] ERROR writing CSV file: " + outFile);
+            e.printStackTrace();
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -111,11 +206,11 @@ public class HTCCmodule extends Module {
      */
     public DataGroup nphePerPMT() {
         DataGroup dg = new DataGroup(1, 1);
-        H1F hi_all = histo1D("hi_nphe_pmt_all", "All PMTs", "NPhe", "Rate [kHz/PMT]", 100, 0, 50, 0);
-        H1F hi_ring1 = histo1D("hi_nphe_pmt_ring1", "Ring 1", "NPhe", "Rate [kHz/PMT]", 100, 0, 50, 0);
-        H1F hi_ring2 = histo1D("hi_nphe_pmt_ring2", "Ring 2", "NPhe", "Rate [kHz/PMT]", 100, 0, 50, 0);
-        H1F hi_ring3 = histo1D("hi_nphe_pmt_ring3", "Ring 3", "NPhe", "Rate [kHz/PMT]", 100, 0, 50, 0);
-        H1F hi_ring4 = histo1D("hi_nphe_pmt_ring4", "Ring 4", "NPhe", "Rate [kHz/PMT]", 100, 0, 50, 0);
+        H1F hi_all = histo1D("hi_nphe_pmt_all", "All PMTs", "NPhe", "Rate [kHz/PMT]", 100, 0, 100, 0);
+        H1F hi_ring1 = histo1D("hi_nphe_pmt_ring1", "Ring 1", "NPhe", "Rate [kHz/PMT]", 100, 0, 100, 0);
+        H1F hi_ring2 = histo1D("hi_nphe_pmt_ring2", "Ring 2", "NPhe", "Rate [kHz/PMT]", 100, 0, 100, 0);
+        H1F hi_ring3 = histo1D("hi_nphe_pmt_ring3", "Ring 3", "NPhe", "Rate [kHz/PMT]", 100, 0, 100, 0);
+        H1F hi_ring4 = histo1D("hi_nphe_pmt_ring4", "Ring 4", "NPhe", "Rate [kHz/PMT]", 100, 0, 100, 0);
         hi_all.setLineColor(1);
         hi_all.setLineWidth(2);
         hi_ring1.setLineColor(4);
@@ -143,8 +238,20 @@ public class HTCCmodule extends Module {
      */
     public DataGroup rateVsRingThreshold() {
         DataGroup dg = new DataGroup(1, 1);
-        H1F hi0 = histo1D("hi_rvr_nphe0", "NPhe > 0", "Ring", "Rate [kHz/PMT]", NRINGS, 0.5, NRINGS + 0.5, 0);
-        H1F hi10 = histo1D("hi_rvr_nphe10", "NPhe > 10", "Ring", "Rate [kHz/PMT]", NRINGS, 0.5, NRINGS + 0.5, 0);
+        H1F hi0 = histo1D(
+                "hi_rvr_nphe0",
+                "NPhe > 0",
+                "Ring",
+                "Rate [kHz/PMT]",
+                6, 0.0, 6.0, 0);
+
+        H1F hi10 = histo1D(
+                "hi_rvr_nphe10",
+                "NPhe > 10",
+                "Ring",
+                "Rate [kHz/PMT]",
+                6, 0.0, 6.0, 0);
+
         hi0.setLineColor(4);
         hi0.setLineWidth(3);
         hi10.setLineColor(2);
@@ -232,6 +339,16 @@ public class HTCCmodule extends Module {
         if (hits == null)
             return;
 
+        // if (EXCLUDED_SECTOR > 0)
+        // hits = hits.stream().filter(h -> h.getSector() !=
+        // 4).collect(Collectors.toList());
+        // hits = hits.stream().filter(h -> h.getSector() !=
+        // EXCLUDED_SECTOR).collect(Collectors.toList());
+        if (EXCLUDED_SECTOR > 0) {
+            hits = hits.stream()
+                    .filter(h -> h.getSector() != EXCLUDED_SECTOR)
+                    .collect(Collectors.toList());
+        }
         fillOccupancy(this.getHistos().get("Occupancy"), hits);
         fillRateBySector(this.getHistos().get("Rate by Sector"), hits);
         fillRateByRing(this.getHistos().get("Rate by Ring"), hits);
@@ -244,11 +361,17 @@ public class HTCCmodule extends Module {
 
     @Override
     public void analyzeHistos() {
+        final int activeSectors = (EXCLUDED_SECTOR > 0) ? NSECTORS - 1 : NSECTORS;
+        final int N_ALL_PMTS = activeSectors * NRINGS * NHALVES;
+        final int N_PER_RING = activeSectors * NHALVES;
+
         // Luminosity scaling: simulation ran at LUMI_EVENT=450, design is 1350.
         // Pass -Dlumi=<LUMI_EVENT> on the command line to rescale rates.
         // lumiScale = x / 1350 (e.g. x=1350 → no change; x=450 → factor 1/3)
         double x = Double.parseDouble(System.getProperty("lumi", "1350.0"));
         double lumiScale = x / 1350.0;
+
+        printHTCCSummary(lumiScale, activeSectors, N_ALL_PMTS, N_PER_RING);
 
         // Occupancy [%] per PMT pair: hits / (0.01 × nevents × NHALVES)
         this.normalize(this.getHistos().get("Occupancy"),
@@ -271,8 +394,6 @@ public class HTCCmodule extends Module {
         this.normalize(this.getHistos().get("Sector BG"), lumiScale);
 
         // NPhe per PMT: kHz, lumi-scaled, then divide by number of PMTs
-        final int N_ALL_PMTS = NSECTORS * NRINGS * NHALVES; // 48
-        final int N_PER_RING = NSECTORS * NHALVES; // 12
         DataGroup npheGroup = this.getHistos().get("NPhe per PMT");
         this.normalizeToTime(npheGroup);
         this.normalize(npheGroup, lumiScale);
@@ -285,43 +406,40 @@ public class HTCCmodule extends Module {
         this.normalizeToTime(rvrGroup);
         this.normalize(rvrGroup, lumiScale);
         this.normalize(rvrGroup, (double) N_PER_RING);
+
+        // Write rate and probability table after all normalizations
+        writeRateProbabilityCSV(lumiScale);
     }
 
     @Override
     public void setPlottingOptions(String name) {
-        // Set per-canvas (GStyle is global; must set here to override other modules)
-        GStyle.getAxisAttributesX().setTitleFontSize(32);
-        GStyle.getAxisAttributesY().setTitleFontSize(32);
-        GStyle.getAxisAttributesX().setLabelFontSize(26);
-        GStyle.getAxisAttributesY().setLabelFontSize(26);
-        GStyle.getAxisAttributesZ().setTitleFontSize(26);
-        GStyle.getAxisAttributesZ().setLabelFontSize(22);
+        GStyle.getAxisAttributesX().setTitleFontSize(42);
+        GStyle.getAxisAttributesY().setTitleFontSize(42);
+        GStyle.getAxisAttributesX().setLabelFontSize(46);
+        GStyle.getAxisAttributesY().setLabelFontSize(46);
+        GStyle.getAxisAttributesZ().setTitleFontSize(46);
+        GStyle.getAxisAttributesZ().setLabelFontSize(42);
+
+        // Not available in your GROOT version
+        // GStyle.getLegendAttributes().setFontSize(42);
 
         for (EmbeddedPad pad : this.getCanvas(name).getCanvasPads())
             pad.setTitle("");
 
-        // if (name.equals("Occupancy") || name.contains("Origin")) {
-        // // GStyle is already set to 32/26 above; redrawing now applies those sizes to
-        // H2F axes
-        // this.getCanvas(name).draw(this.getHistos().get(name));
-        // this.setLogZ(name);
-        // }
-
-        // // x=250 matches DC working value; y=50 places legend near the top inside the
-        // plot
-        // if (name.contains("Rate") || name.contains("BG"))
-        // this.setLegend(name, 1100, 50);
+        if (name.equals("Occupancy")) {
+            this.getCanvas(name).draw(this.getHistos().get(name));
+        }
 
         if (name.equals("NPhe per PMT")) {
             for (EmbeddedPad pad : this.getCanvas(name).getCanvasPads())
                 pad.getAxisY().setLog(true);
-            this.setLegend(name, 1100, 100);
+            this.setLegend(name, 1100, 150);
         }
 
         if (name.equals("Rate vs Ring (Threshold)")) {
             for (EmbeddedPad pad : this.getCanvas(name).getCanvasPads())
                 pad.getAxisY().setLog(true);
-            this.setLegend(name, 1100, 50);
+            this.setLegend(name, 1100, 150);
         }
     }
 
@@ -426,12 +544,18 @@ public class HTCCmodule extends Module {
     public void fillRateVsRingThreshold(DataGroup dg, List<Hit> hits) {
         for (Hit h : hits) {
             double nphe = h.getADC() / ADC_TO_NPHE;
-            // ring = component (1-4)
-            int ring = h.getComponent();
+
+            int ring = h.getComponent(); // 1..4
+            if (ring < 1 || ring > NRINGS)
+                continue;
+
+            double x = ring + 0.5; // fills bins 1-2, 2-3, 3-4, 4-5
+
             if (nphe > 0)
-                dg.getH1F("hi_rvr_nphe0").fill(ring);
+                dg.getH1F("hi_rvr_nphe0").fill(x);
+
             if (nphe > 10)
-                dg.getH1F("hi_rvr_nphe10").fill(ring);
+                dg.getH1F("hi_rvr_nphe10").fill(x);
         }
     }
 
