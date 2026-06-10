@@ -428,6 +428,7 @@ public class HTCCmodule extends Module {
 
         if (name.equals("Occupancy")) {
             this.getCanvas(name).draw(this.getHistos().get(name));
+            this.setupColorAxis(name, "Occupancy [%]");
         }
 
         if (name.equals("NPhe per PMT")) {

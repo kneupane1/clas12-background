@@ -7,7 +7,9 @@ import javax.swing.JFrame;
 import javax.swing.JTabbedPane;
 import modules.CNDmodule;
 import modules.DCmodule;
+import modules.ECmodule;
 import modules.HTCCmodule;
+import modules.FTOFmodule;
 import modules.FTCALmodule;
 import org.jlab.detector.base.DetectorType;
 import org.jlab.groot.base.GStyle;
@@ -72,6 +74,8 @@ public class Background {
 
         this.addModule(active, new DCmodule());
         this.addModule(active, new HTCCmodule());
+        this.addModule(active, new ECmodule());
+        this.addModule(active, new FTOFmodule());
         this.addModule(active, new FTCALmodule());
         this.addModule(active, new CNDmodule());
     }

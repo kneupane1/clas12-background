@@ -109,10 +109,16 @@ public class CNDmodule extends Module {
     @Override
     public void setPlottingOptions(String key) {
         if(key.equals("Occupancy")) {
-            this.getCanvas(key).getCanvasPads().get(1).getAxisZ().setLog(true);
-            this.getCanvas(key).getCanvasPads().get(2).getAxisZ().setLog(true);
-            this.getCanvas(key).getCanvasPads().get(3).getAxisY().setLog(true);
-                this.setLegend("Occupancy", 250, 140);
+            List<org.jlab.groot.graphics.EmbeddedPad> pads = this.getCanvas(key).getCanvasPads();
+            this.setupColorAxis(pads.get(0), "Occupancy [%]");
+            this.setupColorAxis(pads.get(1), "Rate [kHz]");
+            this.setupColorAxis(pads.get(2), "Edep rate [MeV/#mus]");
+            this.setupColorAxis(pads.get(7), "Rate [kHz]");
+            this.setupColorAxis(pads.get(8), "Dose [rad/h]");
+            pads.get(1).getAxisZ().setLog(true);
+            pads.get(2).getAxisZ().setLog(true);
+            pads.get(3).getAxisY().setLog(true);
+            this.setLegend("Occupancy", 250, 140);
         }
     }
    

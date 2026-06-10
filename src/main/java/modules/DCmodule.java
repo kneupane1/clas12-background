@@ -509,6 +509,7 @@ public class DCmodule extends Module {
             for (EmbeddedPad pad : this.getCanvas(name).getCanvasPads()) {
                 pad.getAxisZ().setRange(1, OCC_Z_MAX);
             }
+            this.setupColorAxis(name, "Occupancy [%]");
         }
 
         else if (name.equals("Region Occupancy")) {
@@ -560,6 +561,7 @@ public class DCmodule extends Module {
             GStyle.getAxisAttributesY().setTitleFontSize(20);
             GStyle.getAxisAttributesX().setLabelFontSize(16);
             GStyle.getAxisAttributesY().setLabelFontSize(16);
+            this.setupColorAxis(name, "Rate [kHz]");
             for (EmbeddedPad pad : this.getCanvas(name).getCanvasPads()) {
                 pad.getAxisZ().setRange(1, BG_Y_MAX);
                 if (pad.getDatasetPlotters().size() == 0)
