@@ -12,6 +12,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import objects.Event;
 import org.jlab.detector.base.DetectorType;
+import org.jlab.groot.base.PadMargins;
 import org.jlab.groot.data.H1F;
 import org.jlab.groot.data.H2F;
 import org.jlab.groot.data.IDataSet;
@@ -495,6 +496,11 @@ public class Module {
         za.getAttributes().setLabelFontSize(26);
         za.getAttributes().setLabelFontName("Arial");
         za.setTitle(zTitle);
+        // Widen the right margin so the color bar is wider and labels have room
+        PadMargins pm = new PadMargins();
+        pm.setLeftMargin(80).setRightMargin(160).setTopMargin(40).setBottomMargin(70);
+        pm.setFixed(true);
+        pad.setMargins(pm);
     }
 
     /**

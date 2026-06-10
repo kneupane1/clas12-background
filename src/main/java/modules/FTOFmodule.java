@@ -48,12 +48,12 @@ public class FTOFmodule extends Module {
     private static final String[] PANELS = { "Panel1a", "Panel1b", "Panel2" };
 
     // Concatenated x-axis for the Rate Map: Panel-1B | Panel-1A | Panel-2
-    // Layer 2 (1b, 62 paddles): bins  1-62   offset=0
-    // Layer 1 (1a, 23 paddles): bins 73-95   offset=72
-    // Layer 3 (P2,  5 paddles): bins 107-111 offset=106
+    // Layer 2 (1b, 62 paddles): bins 1-62 offset=0
+    // Layer 1 (1a, 23 paddles): bins 71-93 offset=70
+    // Layer 3 (P2, 5 paddles): bins 101-106 offset=100
     // PADDLE_XOFFSET index = layer-1
-    private static final int[] PADDLE_XOFFSET = { 72, 0, 106 };
-    private static final int   RATEMAP_NBINS  = 120;
+    private static final int[] PADDLE_XOFFSET = { 70, 0, 100 };
+    private static final int RATEMAP_NBINS = 120;
 
     // Diagnostic counters — printed once in analyzeHistos()
     private long diagTotal = 0, diagOrder1 = 0, diagLowEdep = 0, diagFilled = 0;
@@ -121,7 +121,8 @@ public class FTOFmodule extends Module {
     }
 
     /**
-     * 2D rate map [kHz]: all panels concatenated on x (1B | 1A | P2) vs sector on y.
+     * 2D rate map [kHz]: all panels concatenated on x (1B | 1A | P2) vs sector on
+     * y.
      * Mirrors Figure 7 of CLAS12 Note 2017-016.
      * X layout: Panel-1B paddles 1-62 (bins 1-62), gap, Panel-1A paddles 1-23
      * (bins 73-95), gap, Panel-2 paddles 1-5 (bins 107-111).
@@ -140,7 +141,8 @@ public class FTOFmodule extends Module {
      * 2D PMT current map [µA]: same paddle layout as Rate Map (x) vs sector (y).
      * Weight per hit: Edep_MeV × photon_yield × 1.6e-7 [nC/ph] / (2×h_cm).
      * Photon yields: P1a/P2 = 373 ph/MeV, P1b = 1158 ph/MeV.
-     * 2×h: P1a=10 (2×5cm thickness), P1b=12 (2×6cm thickness), P2=10 (2×5cm thickness).
+     * 2×h: P1a=10 (2×5cm thickness), P1b=12 (2×6cm thickness), P2=10 (2×5cm
+     * thickness).
      */
     public DataGroup pmtCurrentMap() {
         DataGroup dg = new DataGroup(1, 1);
@@ -196,43 +198,49 @@ public class FTOFmodule extends Module {
             List<Hit> hits = new ArrayList<>();
             for (Hit h : allHits) {
                 diagTotal++;
-                if (h.getOrder() != 0)                  { diagOrder1++;  continue; }
-                if (h.getTrue().getEdep() <= 1.0e-3)    { diagLowEdep++; continue; }
-                if (EXCLUDED_SECTOR > 0 && h.getSector() == EXCLUDED_SECTOR) continue;
+                if (h.getOrder() != 0) {
+                    diagOrder1++;
+                    continue;
+                }
+                if (h.getTrue().getEdep() <= 1.0) {
+                    diagLowEdep++;
+                    continue;
+                }
+                if (EXCLUDED_SECTOR > 0 && h.getSector() == EXCLUDED_SECTOR)
+                    continue;
                 hits.add(h);
             }
             diagFilled += hits.size();
 
-            DataGroup dgMap     = this.getHistos().get("Sector-Layer Map");
-            DataGroup dgRate    = this.getHistos().get("Rate by Sector");
-            DataGroup dgPaddle  = this.getHistos().get("Paddle Map");
+            DataGroup dgMap = this.getHistos().get("Sector-Layer Map");
+            DataGroup dgRate = this.getHistos().get("Rate by Sector");
+            DataGroup dgPaddle = this.getHistos().get("Paddle Map");
             DataGroup dgRateMap = this.getHistos().get("Rate Map");
-            DataGroup dgCurr    = this.getHistos().get("PMT Current Map");
+            DataGroup dgCurr = this.getHistos().get("PMT Current Map");
 
             for (Hit h : hits) {
                 int sector = h.getSector();
-                int layer  = h.getLayer();
+                int layer = h.getLayer();
                 int paddle = h.getComponent();
-                if (sector < 1 || sector > NSECTORS) continue;
-                if (layer  < 1 || layer  > NLAYERS)  continue;
+                if (sector < 1 || sector > NSECTORS)
+                    continue;
+                if (layer < 1 || layer > NLAYERS)
+                    continue;
 
                 dgMap.getH2F("hi_sec_lay").fill(sector, layer);
                 dgRate.getH1F("hi_rate_sec_" + PANELS[layer - 1]).fill(sector);
                 dgPaddle.getH2F("hi_paddle_s" + sector).fill(paddle, layer);
                 dgRateMap.getH2F("hi_rate_map").fill(paddle + PADDLE_XOFFSET[layer - 1], sector);
 
-                // PMT current (Carman's formula, from FTOF NIM paper):
-                //   weight [nC] = Edep_MeV × photon_yield [ph/MeV] × 1.6e-7 [nC/ph] / (2×h)
-                // Scintillator thickness h: P1a=5cm → 2h=10, P1b=6cm → 2h=12, P2=5cm → 2h=10.
-                // NOTE: the paddle WIDTH (15/6/22 cm from Table 1) is a separate variable used
-                // only in the normalised-occupancy plots — it does NOT appear here.
-                // P2 has no override in the reference C++ code; it uses the same formula as P1a.
-                double edep_MeV = h.getTrue().getEdep() * 1000.0;
+                // PMT current (Carman's formula): weight = Edep [MeV] × yield [ph/MeV] × 1.6e-7 / (2h [cm])
+                // 2h: P1a=10 (2×5 cm), P1b=12 (2×6 cm), P2=10 (2×5 cm).
+                // getEdep() returns MeV directly (CLAS12 HIPO MC::True convention).
+                double edep_MeV = h.getTrue().getEdep();
                 double weightCurrent;
                 if (layer == 2) {
                     weightCurrent = edep_MeV * 1158.0 * 1.6e-7 / 12.0; // P1b: 2h=12
                 } else {
-                    weightCurrent = edep_MeV * 373.0  * 1.6e-7 / 10.0; // P1a and P2: 2h=10
+                    weightCurrent = edep_MeV * 373.0 * 1.6e-7 / 10.0; // P1a and P2: 2h=10
                 }
                 dgCurr.getH2F("hi_pmt_curr").fill(paddle + PADDLE_XOFFSET[layer - 1], sector, weightCurrent);
             }
@@ -277,8 +285,8 @@ public class FTOFmodule extends Module {
         this.normalizeToTime(this.getHistos().get("Rate Map"));
         this.normalize(this.getHistos().get("Rate Map"), lumiScale);
 
-        // PMT current map [µA]: normalizeToTime computes sum(w)/total_ns×1e6 = µA, lumi-scaled
-        this.normalizeToTime(this.getHistos().get("PMT Current Map"));
+        // PMT current map [µA]: weight is in µC (Carman formula), divide by time_s → µC/s = µA
+        this.normalizeToTime(this.getHistos().get("PMT Current Map").getH2F("hi_pmt_curr"), 1);
         this.normalize(this.getHistos().get("PMT Current Map"), lumiScale);
 
         // Position map [kHz/bin], lumi-scaled
